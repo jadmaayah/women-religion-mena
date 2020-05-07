@@ -1,0 +1,12 @@
+name: WomenReligionMENA
+title: WomenReligionMENA
+username:
+account: jadmaayah
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2181153
+bundleId: 3117469
+url: https://jadmaayah.shinyapps.io/WomenReligionMENA/
+when: 1588877601.196
+asMultiple: FALSE
+asStatic: FALSE

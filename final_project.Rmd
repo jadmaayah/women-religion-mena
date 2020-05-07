@@ -1,0 +1,237 @@
+---
+title: "Views on Women in the Middle East"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(janitor)
+library(naniar)
+library(broom)
+```
+
+```{r, include = FALSE, message = FALSE}
+wave_v <- read_csv("raw-data/v.csv") %>% 
+  clean_names()
+```
+
+```{r women in government, echo = FALSE}
+
+# This R chunk looks at Q601a: "Some people think in order to achieve fairer
+# representation a certain percentage of elected positions should be set aside
+# for women. To what extent do you agree with this statement?" 1 is strongly
+# agree, 4 is strongly disagree.
+
+elect_women <- wave_v %>% 
+            filter(q601a == 1 |
+                       q601a == 2 |
+                       q601a == 3 |
+                       q601a == 4) %>%
+            select(country, q601a)
+
+write_rds(elect_women,"Shiny_app/elect.rds")
+
+```
+
+```{r, echo = FALSE}
+# Drop down by question, fill by yes/no, countries on x-axis! I manipulate these
+# values in order to easily reproduce charts on the Shiny app without any
+# clutter.
+
+# For the second model, I complete several important transformations in order to
+# achieve a digestible visualization. First and foremost, I select for the
+# questions of interest in the Arab Barometer, which all fall under Q601. I
+# transform responses of “1. Strongly agree” and “2. Agree” to just “Agree,”
+# while doing the same for “Disagree” (values 3 and 4). As such, I can visualize
+# the data in a way that makes sense rather than having 4 response values that
+# might confuse.
+
+culture <- wave_v %>%
+  select(country, q601_1:q601_18, -q601_9a) %>%
+  mutate_at(vars(contains("q601")), 
+           funs(ifelse(. %in% c(1, 2), "Agree", 
+                       ifelse(. %in% c(3, 4), "Disagree", "Missing/Not Asked")))) %>% 
+         
+         # Then, I change the names for the country codes so that my Shiny app
+         # does not have to complete a lot of work in order to change the names
+         # every time an input is selected.
+         
+         mutate(country = replace(country, country == "1", "Algeria"),
+         country = replace(country, country == "5", "Egypt"),
+         country = replace(country, country == "7", "Iraq"),
+         country = replace(country, country == "8", "Jordan"),
+         country = replace(country, country == "9", "Kuwait"),
+         country = replace(country, country == "10", "Lebanon"),
+         country = replace(country, country == "11", "Libya"),
+         country = replace(country, country == "13", "Morocco"),
+         country = replace(country, country == "15", "Palestine"),
+         country = replace(country, country == "19", "Sudan"),
+         country = replace(country, country == "21", "Tunisia"),
+         country = replace(country, country == "22", "Yemen"))
+
+write_rds(culture,"Shiny_app/culture.rds")
+```
+
+```{r}
+# For my final model, I want to find the correlation, if any, between the
+# average score per respondent on matters relating to gender and their
+# religiosity.
+
+# For each respondent, I take the average score on the questions observed above
+# and turn that into their attitude toward women. Then, having created this new
+# variable, I use it as a measure against religiosity. Below is my religion to
+# culture code.
+
+# Because the questions differ on some dimensions, I am going to first
+# manipulate them all so that 1 (agree) refers to the pro-gender equality
+# opinion, while 4 (disagree) refers to the anti-gender equality opinion. I then
+# do the same for religiosity
+
+rlg_clt <- wave_v %>% 
+  select(country, q601_1:q601_18, -q601_9a, q606_1:q606_8) %>%
+  
+  # The first prompt whose scales I reverse is: "In general, men are better at
+  # political leadership than women."
+  
+  mutate(q601_3 = ifelse(q601_3 == 1, 8, q601_3),
+         q601_3 = ifelse(q601_3 == 2, 7, q601_3),
+         q601_3 = ifelse(q601_3 == 3, 6, q601_3),
+         q601_3 = ifelse(q601_3 == 4, 5, q601_3),
+         q601_3 = ifelse(q601_3 == 5, 1, q601_3),
+         q601_3 = ifelse(q601_3 == 6, 2, q601_3),
+         q601_3 = ifelse(q601_3 == 7, 3, q601_3),
+         q601_3 = ifelse(q601_3 == 8, 4, q601_3),
+         
+  # The second prompt whose scales I reverse is: "University education for males
+  # is more important than university education for females."
+         
+         q601_4 = ifelse(q601_4 == 1, 8, q601_4),
+         q601_4 = ifelse(q601_4 == 2, 7, q601_4),
+         q601_4 = ifelse(q601_4 == 3, 6, q601_4),
+         q601_4 = ifelse(q601_4 == 4, 5, q601_4),
+         q601_4 = ifelse(q601_4 == 5, 1, q601_4),
+         q601_4 = ifelse(q601_4 == 6, 2, q601_4),
+         q601_4 = ifelse(q601_4 == 7, 3, q601_4),
+         q601_4 = ifelse(q601_4 == 8, 4, q601_4),
+  
+  # The second prompt whose scales I reverse is: "Husbands should have final say
+  # in all decisions concerning the family."
+  
+         q601_18 = ifelse(q601_18 == 1, 8, q601_18),
+         q601_18 = ifelse(q601_18 == 2, 7, q601_18),
+         q601_18 = ifelse(q601_18 == 3, 6, q601_18),
+         q601_18 = ifelse(q601_18 == 4, 5, q601_18),
+         q601_18 = ifelse(q601_18 == 5, 1, q601_18),
+         q601_18 = ifelse(q601_18 == 6, 2, q601_18),
+         q601_18 = ifelse(q601_18 == 7, 3, q601_18),
+         q601_18 = ifelse(q601_18 == 8, 4, q601_18),
+  
+  # All other prompts contain a statement indicating equality. Next, I transform
+  # some of the variables pertaining to religion. I transform them so that a
+  # value of 4 on the religious index indicates being religious (supporting
+  # religion in public life), whereas 1 indicates being non-religious. 
+  
+  # This is the first question I transform so that 4 (disagree) indicates high
+  # religiosity. The prompt: "Your country is better off if religious people
+  # hold public positions in the state."
+  
+         q606_2 = ifelse(q606_2 == 1, 8, q606_2),
+         q606_2 = ifelse(q606_2 == 2, 7, q606_2),
+         q606_2 = ifelse(q606_2 == 3, 6, q606_2),
+         q606_2 = ifelse(q606_2 == 4, 5, q606_2),
+         q606_2 = ifelse(q606_2 == 5, 1, q606_2),
+         q606_2 = ifelse(q606_2 == 6, 2, q606_2),
+         q606_2 = ifelse(q606_2 == 7, 3, q606_2),
+         q606_2 = ifelse(q606_2 == 8, 4, q606_2),
+  
+  # This is the second question I transform to indicate a high score for high
+  # religiosity. The prompt states: "Religious clerics should have influence
+  # over the decisions of the government."
+  
+         q606_3 = ifelse(q606_3 == 1, 8, q606_3),
+         q606_3 = ifelse(q606_3 == 2, 7, q606_3),
+         q606_3 = ifelse(q606_3 == 3, 6, q606_3),
+         q606_3 = ifelse(q606_3 == 4, 5, q606_3),
+         q606_3 = ifelse(q606_3 == 5, 1, q606_3),
+         q606_3 = ifelse(q606_3 == 6, 2, q606_3),
+         q606_3 = ifelse(q606_3 == 7, 3, q606_3),
+         q606_3 = ifelse(q606_3 == 8, 4, q606_3)) %>%
+  
+  #Next, I change values that are 98 or 99 (don't know / refuse) to N/A in order
+  #to adequately measure the equality and religiosity indices for each
+  #respondent!
+  
+  replace_with_na(.,
+                  replace = list(q601_1 = c(99, 98),
+                          q601_3 = c(99, 98),
+                          q601_4 = c(99, 98),
+                          q601_7 = c(99, 98),
+                          q601_9 = c(99, 98),
+                          q601_14 = c(99, 98),
+                          q601_18 = c(99, 98),
+                          q606_1 = c(99, 98),
+                          q606_2 = c(99, 98),
+                          q606_3 = c(99, 98),
+                          q606_4 = c(99, 98),
+                          q606_8 = c(99, 98)))
+
+# Having built the rlg_clt data frame, I can now measure the equality index by
+# taking the average of all the questions. On the index, 1 indicates being
+# gender nondiscriminatory, while 4 indicates being gender discriminatory For
+# the religiosity index, 1 indicates religious while 4 indicates non-religious.
+
+rlg_clt <- rlg_clt %>% 
+  rowwise() %>% 
+  mutate(equality_index = mean(c(q601_1, q601_3, q601_4, q601_7, q601_9, 
+                                 q601_14, q601_18), na.rm = TRUE),
+         religiosity_index = mean(c(q606_1, q606_2, q606_3, q606_4, q606_8), 
+                                  na.rm = TRUE))
+
+# I can now save rlg_clt as an R object to use in my Shiny app. 
+
+write_rds(rlg_clt,"Shiny_app/rlg_clt.rds")
+
+# This part of my code will now try to run a regression that measures the
+# relationship between religiosity and views on equality.
+
+rlgclt_cor <- rlg_clt %>% 
+  drop_na() %>% 
+  summarize(correlation = cor(religiosity_index, equality_index))
+
+write_rds(rlgclt_cor,"Shiny_app/rlgclt_cor.rds")
+
+# The above code returns a correlation of 0.3342444, indicating a rather strong
+# positive correlation. In other words, the more you support religion in public
+# institutions (proxy for religiosity, religiosity_index approaches 4), the less
+# you support equality (equality_index approaches 4),
+
+# Below is the regression table for this analysis. It shows that increasing the
+# religiosity_index by 1 will translate into a 0.28 increase in support for
+# gender discriminatory values.
+
+rlgclt_reg <- rlg_clt %>% 
+  lm(equality_index ~ religiosity_index, data = .) %>% 
+  tidy(conf.int = TRUE) %>% 
+  select(term, estimate, conf.low, conf.high) 
+
+write_rds(rlgclt_reg,"Shiny_app/rlgclt_reg.rds")
+
+# To visualize this, I use a scatterplot with religiosity on the y-axis and
+# gender-discriminatory values on the x-axis.
+
+rlgclt_plot <- rlg_clt %>%
+  ggplot(aes(x = equality_index, y = religiosity_index)) +
+  geom_point(alpha = 0.1) + 
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(y = "Religiosity",
+       x = "Support for Gender Discriminatory Norms") +
+  theme_classic() +
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+
+write_rds(rlgclt_plot,"Shiny_app/rlgclt_plot.rds")
+```
+
